@@ -135,15 +135,11 @@
   const btnReservarMultiplos = document.getElementById('btn-reservar-multiplos');
   const tabClientes = document.getElementById('tab-clientes');
   const tabFornecedores = document.getElementById('tab-fornecedores');
-
-  // Modal reserva placas
   const modal = document.getElementById('modal');
   const modalCheckboxes = document.getElementById('modal-checkboxes');
   const modalCliente = document.getElementById('modal-cliente');
   const btnConfirmar = document.getElementById('modal-confirmar');
   const btnCancelar = document.getElementById('modal-cancelar');
-
-  // Modal login
   const loginModal = document.getElementById('login-modal');
   const loginUsername = document.getElementById('login-username');
   const loginPassword = document.getElementById('login-password');
@@ -218,9 +214,9 @@
   async function carregarDados() {
     try {
       const [statusRes, clientesRes, fornecedoresRes] = await Promise.all([
-        fetch('/api/status'),
-        fetch('/api/clientes'),
-        fetch('/api/fornecedores')
+        fetch('/api/status', {cache: "no-store"}),
+        fetch('/api/clientes', {cache: "no-store"}),
+        fetch('/api/fornecedores', {cache: "no-store"})
       ]);
       statusData = await statusRes.json();
       clientesData = await clientesRes.json();
@@ -232,7 +228,7 @@
 
   async function carregarOutdoors() {
     try {
-      const res = await fetch('/outdoors.json');
+      const res = await fetch('/outdoors.json', {cache: "no-store"});
       outdoors = await res.json();
     } catch (e) {
       console.error('Erro ao carregar outdoors', e);
@@ -256,6 +252,8 @@
           cliente: input.value
         })
       });
+      await carregarDados();
+      renderizarTabela();
     });
     return input;
   }
@@ -275,6 +273,8 @@
           fornecedor: input.value
         })
       });
+      await carregarDados();
+      renderizarTabela();
     });
     return input;
   }
@@ -396,6 +396,8 @@
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, cliente: '' })
         });
+
+        await carregarDados();
         renderizarTabela();
       }
     });
@@ -439,6 +441,7 @@
           body: JSON.stringify({ bisemana: bi, outdoorId, cliente: clientesData[bi][outdoorId] })
         });
       }
+      await carregarDados();
       renderizarTabela();
     }, clienteAtual);
   }
@@ -583,6 +586,7 @@
           });
         }
       }
+      await carregarDados();
       renderizarTabela();
     });
   });
@@ -595,5 +599,6 @@
 
 })();
 </script>
+
 </body>
 </html>
