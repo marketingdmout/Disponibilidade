@@ -54,7 +54,7 @@ app.get('/', (req, res) => {
 
 app.post('/login', (req, res) => {
   const { usuario, senha } = req.body;
-  if (usuario === 'michelly' && senha === '1234') {
+  if (usuario === 'atendimento' && senha === '9937') {
     req.session.autorizado = true;
     return res.sendStatus(200);
   }
