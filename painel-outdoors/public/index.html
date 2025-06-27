@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Controle de Outdoors - Bi-semanas 2025</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; background: #fff; color: #222; }
+    #sidebar { width: 280px; background: #2c3e50; color: white; padding-top: 20px; box-sizing: border-box; overflow-y: auto; border-right: 1px solid #1a252f; }
+    #sidebar h2 { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-weight: normal; font-size: 18px; }
+    #bisemanas-list { list-style: none; padding: 0 10px; margin: 0; }
+    #bisemanas-list li { padding: 12px 10px; cursor: pointer; border-left: 4px solid transparent; user-select: none; transition: background 0.2s, border-color 0.2s; font-size: 14px; line-height: 1.3; white-space: normal; }
+    #bisemanas-list li:hover { background: #34495e; }
+    #bisemanas-list li.active { background: #2c3e50; border-left-color: #f39c12; font-weight: bold; color: white; }
+    #bisemanas-list li.current-bisemana { background-color: #2980b9; border-left-color: #2980b9; font-weight: bold; color: white; }
+    #content { flex-grow: 1; padding: 20px 30px; overflow-y: auto; display: flex; flex-direction: column; }
+    h1 { margin-top: 0; margin-bottom: 20px; font-weight: normal; font-size: 24px; display: flex; align-items: center; }
+    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    th, td { padding: 8px 12px; border: 1px solid #ccc; font-size: 13px; text-align: left; }
+    th { background: #2c3e50; color: white; }
+    input[type="text"] { width: 100%; box-sizing: border-box; padding: 5px; font-size: 13px; }
+    .status-toggle { cursor: pointer; padding: 5px 10px; border: none; border-radius: 4px; font-weight: bold; user-select: none; transition: background-color 0.3s; color: white; }
+    #btn-gerar, #btn-reservar-multiplos {
+      padding: 10px 20px;
+      border: none;
+      font-size: 15px;
+      cursor: pointer;
+      border-radius: 4px;
+      color: white;
+      margin-right: 10px;
+    }
+    #btn-gerar { background: #f39c12; }
+    #btn-reservar-multiplos { background: #2980b9; }
+    #tabs { margin-bottom: 15px; }
+    #tabs button { background: #bdc3c7; border: none; padding: 8px 15px; cursor: pointer; font-size: 14px; margin-right: 10px; border-radius: 4px 4px 0 0; color: #2c3e50; font-weight: bold; }
+    #tabs button.active { background: #f39c12; color: white; }
+    #tables-container { flex-grow: 1; overflow-y: auto; }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 8px; width: 300px; max-height: 90vh; overflow-y: auto; }
+    .modal-content h3 { margin-top: 0; font-size: 18px; margin-bottom: 10px; }
+    .modal-content label { display: block; margin-bottom: 5px; }
+    .modal-content input[type="checkbox"] { margin-right: 8px; }
+    .modal-content input[type="text"] { width: 100%; padding: 5px; margin: 10px 0; }
+    .modal-buttons { display: flex; justify-content: space-between; margin-top: 10px; }
+    .modal-buttons button { padding: 6px 12px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="modal" class="modal">
+    <div class="modal-content">
+      <h3>Marcar como Ocupado</h3>
+      <label>Bi-semanas:</label>
+      <div id="modal-checkboxes"></div>
+      <label>Cliente:</label>
+      <input type="text" id="modal-cliente" placeholder="Nome do cliente" />
+      <div class="modal-buttons">
+        <button id="modal-confirmar">Confirmar</button>
+        <button id="modal-cancelar">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <h2>
+      <img src="logo.png" alt="Logo" style="height: 30px; margin-right: 10px; vertical-align: middle;">
+      Bi-semanas 2025
+    </h2>
+    <ul id="bisemanas-list"></ul>
+  </div>
+  <div id="content">
+    <h1>
+      <img src="logo.png" alt="Logo" style="height: 30px; margin-right: 10px; vertical-align: middle;">
+      Controle de Outdoors
+    </h1>
+    <div id="tabs">
+      <button id="tab-clientes" class="active">Clientes</button>
+      <button id="tab-fornecedores">Fornecedores</button>
+    </div>
+    <label for="filtroStatus">Filtro Status:</label>
+    <select id="filtroStatus" style="margin-bottom: 15px; font-size: 14px; padding: 5px;">
+      <option value="todos">Todos</option>
+      <option value="ocupados">Ocupados</option>
+      <option value="disponiveis">Disponíveis</option>
+    </select>
+    <div id="tables-container"></div>
+    <div style="margin-bottom: 20px;">
+      <button id="btn-gerar">Gerar PDF</button>
+      <button id="btn-reservar-multiplos">Reservar Selecionadas</button>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const bisemanas = Array.from({length:26}, (_,i) => String(2 + i*2).padStart(2,'0'));
+  let statusData = {};
+  let clientesData = {};
+  let fornecedoresData = {};
+  let outdoors = [];
+
+  const bisemanasList = document.getElementById('bisemanas-list');
+  const tablesContainer = document.getElementById('tables-container');
+  const btnGerar = document.getElementById('btn-gerar');
+  const btnReservarMultiplos = document.getElementById('btn-reservar-multiplos');
+  const tabClientes = document.getElementById('tab-clientes');
+  const tabFornecedores = document.getElementById('tab-fornecedores');
+
+  const modal = document.getElementById('modal');
+  const modalCheckboxes = document.getElementById('modal-checkboxes');
+  const modalCliente = document.getElementById('modal-cliente');
+  const btnConfirmar = document.getElementById('modal-confirmar');
+  const btnCancelar = document.getElementById('modal-cancelar');
+
+  let callbackConfirmar = null;
+  let abaAtual = 'clientes';
+  let bisemanaSelecionada = bisemanas[0];
+
+  function criarLiBisemana(bi) {
+    const li = document.createElement('li');
+    li.textContent = `Bi-semana ${bi}`;
+    li.dataset.bisemana = bi;
+    return li;
+  }
+
+  function biAtual() {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    if (ano !== 2025) return bisemanas[0];
+    const inicioAno = new Date(2025, 0, 1);
+    const diffDias = Math.floor((hoje - inicioAno) / (1000*60*60*24));
+    const bi = 2 + Math.floor(diffDias / 14) * 2;
+    const biStr = String(bi).padStart(2,'0');
+    return bisemanas.includes(biStr) ? biStr : bisemanas[bisemanas.length-1];
+  }
+
+  bisemanas.forEach(bi => {
+    const li = criarLiBisemana(bi);
+    if (bi === biAtual()) li.classList.add('current-bisemana');
+    if (bi === bisemanaSelecionada) li.classList.add('active');
+    bisemanasList.appendChild(li);
+  });
+
+  bisemanasList.addEventListener('click', e => {
+    if (e.target.tagName === 'LI') {
+      bisemanaSelecionada = e.target.dataset.bisemana;
+      atualizarAtivoSidebar();
+      renderizarTabela();
+    }
+  });
+
+  function atualizarAtivoSidebar(){
+    [...bisemanasList.children].forEach(li => {
+      li.classList.remove('active');
+      if (li.dataset.bisemana === bisemanaSelecionada) li.classList.add('active');
+    });
+  }
+
+  tabClientes.addEventListener('click', () => {
+    abaAtual = 'clientes';
+    tabClientes.classList.add('active');
+    tabFornecedores.classList.remove('active');
+    renderizarTabela();
+  });
+  tabFornecedores.addEventListener('click', () => {
+    abaAtual = 'fornecedores';
+    tabClientes.classList.remove('active');
+    tabFornecedores.classList.add('active');
+    renderizarTabela();
+  });
+
+  async function carregarDados() {
+    try {
+      const [statusRes, clientesRes, fornecedoresRes] = await Promise.all([
+        fetch('/api/status'),
+        fetch('/api/clientes'),
+        fetch('/api/fornecedores')
+      ]);
+      statusData = await statusRes.json();
+      clientesData = await clientesRes.json();
+      fornecedoresData = await fornecedoresRes.json();
+    } catch (e) {
+      console.error('Erro ao carregar dados', e);
+    }
+  }
+
+  async function carregarOutdoors() {
+    try {
+      const res = await fetch('/outdoors.json');
+      outdoors = await res.json();
+    } catch (e) {
+      console.error('Erro ao carregar outdoors', e);
+    }
+  }
+
+  function criarInputCliente(outdoorId, valor) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valor || '';
+    input.placeholder = 'Cliente';
+    input.addEventListener('change', async () => {
+      if (!clientesData[bisemanaSelecionada]) clientesData[bisemanaSelecionada] = {};
+      clientesData[bisemanaSelecionada][outdoorId] = input.value;
+      await fetch('/api/clientes', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          bisemana: bisemanaSelecionada,
+          outdoorId,
+          cliente: input.value
+        })
+      });
+    });
+    return input;
+  }
+
+  function criarInputFornecedor(outdoorId, valor) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = valor || '';
+    input.placeholder = 'Fornecedor';
+    input.addEventListener('change', async () => {
+      fornecedoresData[outdoorId] = input.value;
+      await fetch('/api/fornecedores', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          outdoorId,
+          fornecedor: input.value
+        })
+      });
+    });
+    return input;
+  }
+
+  function abrirModal(checkboxes, confirmarFn, clienteAtual = '') {
+    modalCheckboxes.innerHTML = '';
+    checkboxes.forEach(bi => {
+      const lbl = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = bi;
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' Bi ' + bi));
+      modalCheckboxes.appendChild(lbl);
+    });
+    modalCliente.value = clienteAtual;
+    callbackConfirmar = confirmarFn;
+    modal.style.display = 'flex';
+  }
+
+  function fecharModal() {
+    modal.style.display = 'none';
+  }
+
+  btnCancelar.onclick = fecharModal;
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+  window.addEventListener('click', e => { if (e.target === modal) fecharModal(); });
+
+  btnConfirmar.onclick = () => {
+    const bis = [...modalCheckboxes.querySelectorAll('input:checked')].map(c => c.value);
+    const cliente = modalCliente.value.trim();
+    if (bis.length === 0 || cliente === '') {
+      alert('Selecione pelo menos uma bi-semana e informe o cliente.');
+      return;
+    }
+    callbackConfirmar(bis, cliente);
+    fecharModal();
+  };
+
+  function criarBotaoStatus(outdoorId) {
+    const btn = document.createElement('button');
+    btn.className = 'status-toggle';
+    const ocupadoAtual = statusData[bisemanaSelecionada]?.[outdoorId] || false;
+    atualizarBotao(btn, ocupadoAtual);
+
+    btn.addEventListener('click', async () => {
+      const ocupado = statusData[bisemanaSelecionada]?.[outdoorId] || false;
+
+      if (!ocupado) {
+        // Abrir modal para marcar como ocupado e selecionar múltiplas bi-semanas + cliente
+        const bisSelecionadas = [];
+        bisemanas.forEach(bi => {
+          if (statusData[bi]?.[outdoorId]) bisSelecionadas.push(bi);
+        });
+        let clienteAtual = '';
+        if (clientesData[bisemanaSelecionada]?.[outdoorId]) {
+          clienteAtual = clientesData[bisemanaSelecionada][outdoorId];
+        } else if (bisSelecionadas.length > 0) {
+          clienteAtual = clientesData[bisSelecionadas[0]]?.[outdoorId] || '';
+        }
+
+        abrirModal(bisemanas, async (bisSelecionadasModal, cliente) => {
+          bisemanas.forEach(bi => {
+            if (!statusData[bi]) statusData[bi] = {};
+            if (!clientesData[bi]) clientesData[bi] = {};
+            if (bisSelecionadasModal.includes(bi)) {
+              statusData[bi][outdoorId] = true;
+              clientesData[bi][outdoorId] = cliente;
+            } else {
+              statusData[bi][outdoorId] = false;
+              clientesData[bi][outdoorId] = '';
+            }
+          });
+
+          for (const bi of bisemanas) {
+            await fetch('/api/status', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ bisemana: bi, outdoorId, ocupado: statusData[bi][outdoorId] })
+            });
+            await fetch('/api/clientes', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ bisemana: bi, outdoorId, cliente: clientesData[bi][outdoorId] })
+            });
+          }
+          renderizarTabela();
+        }, clienteAtual);
+      } else {
+        if (!statusData[bisemanaSelecionada]) statusData[bisemanaSelecionada] = {};
+        if (!clientesData[bisemanaSelecionada]) clientesData[bisemanaSelecionada] = {};
+
+        statusData[bisemanaSelecionada][outdoorId] = false;
+        clientesData[bisemanaSelecionada][outdoorId] = '';
+
+        await fetch('/api/status', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, ocupado: false })
+        });
+        await fetch('/api/clientes', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, cliente: '' })
+        });
+        renderizarTabela();
+      }
+    });
+
+    return btn;
+  }
+
+  function atualizarBotao(btn, ocupado) {
+    btn.textContent = ocupado ? 'Ocupado' : 'Disponível';
+    btn.style.backgroundColor = ocupado ? '#e74c3c' : '#27ae60';
+  }
+
+  // Cria checkbox para seleção múltipla de outdoors
+  function criarCheckboxSelecao(outdoorId) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.outdoorId = outdoorId;
+    return checkbox;
+  }
+
+  function renderizarTabela() {
+    tablesContainer.innerHTML = '';
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const trHead = document.createElement('tr');
+
+    // Coluna seleção
+    const thSel = document.createElement('th');
+    thSel.textContent = '';
+    trHead.appendChild(thSel);
+
+    ['Nome', 'Endereço', 'Status', abaAtual === 'clientes' ? 'Cliente' : 'Fornecedor'].forEach(titulo => {
+      const th = document.createElement('th');
+      th.textContent = titulo;
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    outdoors.forEach(out => {
+      const ocupado = statusData[bisemanaSelecionada]?.[out.id] || false;
+      const filtroStatus = document.getElementById('filtroStatus').value;
+      if (filtroStatus === 'ocupados' && !ocupado) return;
+      if (filtroStatus === 'disponiveis' && ocupado) return;
+
+      const tr = document.createElement('tr');
+
+      // Checkbox seleção
+      const tdSel = document.createElement('td');
+      const checkbox = criarCheckboxSelecao(out.id);
+      tdSel.appendChild(checkbox);
+      tr.appendChild(tdSel);
+
+      const tdNome = document.createElement('td');
+      tdNome.textContent = out.nome;
+      tr.appendChild(tdNome);
+
+      const tdEndereco = document.createElement('td');
+      tdEndereco.textContent = out.endereco;
+      tr.appendChild(tdEndereco);
+
+      const tdStatus = document.createElement('td');
+      const btnStatus = criarBotaoStatus(out.id);
+      tdStatus.appendChild(btnStatus);
+      tr.appendChild(tdStatus);
+
+      const tdClienteFornecedor = document.createElement('td');
+      if (abaAtual === 'clientes') {
+        const valCliente = clientesData[bisemanaSelecionada]?.[out.id] || '';
+        const inputCliente = criarInputCliente(out.id, valCliente);
+        tdClienteFornecedor.appendChild(inputCliente);
+      } else {
+        const valFornecedor = fornecedoresData[out.id] || '';
+        const inputFornecedor = criarInputFornecedor(out.id, valFornecedor);
+        tdClienteFornecedor.appendChild(inputFornecedor);
+      }
+      tr.appendChild(tdClienteFornecedor);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    tablesContainer.appendChild(table);
+  }
+
+  document.getElementById('filtroStatus').addEventListener('change', renderizarTabela);
+
+  btnGerar.addEventListener('click', async () => {
+    const filtroStatus = document.getElementById('filtroStatus').value;
+    const response = await fetch('/api/relatorio', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ bisemanas: [bisemanaSelecionada], filtroStatus })
+    });
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio_bisemana_${bisemanaSelecionada}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  });
+
+  // Botão para reservar múltiplas placas em múltiplas bi-semanas
+  btnReservarMultiplos.addEventListener('click', () => {
+    // Coleta todos os outdoors selecionados
+    const checkboxes = tablesContainer.querySelectorAll('input[type=checkbox]:checked');
+    if (checkboxes.length === 0) {
+      alert('Selecione ao menos uma placa para reservar.');
+      return;
+    }
+    const selectedOutdoors = [...checkboxes].map(cb => cb.dataset.outdoorId);
+
+    abrirModal(bisemanas, async (bisSelecionadasModal, cliente) => {
+      for (const bi of bisSelecionadasModal) {
+        if (!statusData[bi]) statusData[bi] = {};
+        if (!clientesData[bi]) clientesData[bi] = {};
+        for (const outId of selectedOutdoors) {
+          statusData[bi][outId] = true;
+          clientesData[bi][outId] = cliente;
+
+          await fetch('/api/status', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bi, outdoorId: outId, ocupado: true })
+          });
+          await fetch('/api/clientes', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bi, outdoorId: outId, cliente })
+          });
+        }
+      }
+      renderizarTabela();
+    });
+  });
+
+  await carregarOutdoors();
+  await carregarDados();
+
+  atualizarAtivoSidebar();
+  renderizarTabela();
+
+})();
+</script>
+</body>
+</html>
