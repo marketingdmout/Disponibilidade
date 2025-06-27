@@ -1,4 +1,5 @@
 const express = require('express');
+const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit');
@@ -8,6 +9,13 @@ const PORT = 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+  secret: 'michelly123',
+  resave: false,
+  saveUninitialized: true
+}));
 
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
@@ -44,11 +52,26 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.post('/login', (req, res) => {
+  const { usuario, senha } = req.body;
+  if (usuario === 'michelly' && senha === '1234') {
+    req.session.autorizado = true;
+    return res.sendStatus(200);
+  }
+  res.sendStatus(401);
+});
+
+app.get('/painel', (req, res) => {
+  if (!req.session.autorizado) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.get('/api/status', (req, res) => res.json(statusData));
 app.get('/api/clientes', (req, res) => res.json(clientesData));
 app.get('/api/fornecedores', (req, res) => res.json(fornecedoresData));
 
 app.post('/api/status', (req, res) => {
+  if (!req.session.autorizado) return res.sendStatus(403);
   const { bisemana, outdoorId, ocupado } = req.body;
   if (!statusData[bisemana]) statusData[bisemana] = {};
   statusData[bisemana][outdoorId] = ocupado;
@@ -57,6 +80,7 @@ app.post('/api/status', (req, res) => {
 });
 
 app.post('/api/clientes', (req, res) => {
+  if (!req.session.autorizado) return res.sendStatus(403);
   const { bisemana, outdoorId, cliente } = req.body;
   if (!clientesData[bisemana]) clientesData[bisemana] = {};
   clientesData[bisemana][outdoorId] = cliente;
@@ -65,6 +89,7 @@ app.post('/api/clientes', (req, res) => {
 });
 
 app.post('/api/fornecedores', (req, res) => {
+  if (!req.session.autorizado) return res.sendStatus(403);
   const { outdoorId, fornecedor } = req.body;
   fornecedoresData[outdoorId] = fornecedor;
   saveJSON('fornecedores.json', fornecedoresData);
