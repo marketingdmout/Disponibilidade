@@ -35,8 +35,6 @@
     #tabs button { background: #bdc3c7; border: none; padding: 8px 15px; cursor: pointer; font-size: 14px; margin-right: 10px; border-radius: 4px 4px 0 0; color: #2c3e50; font-weight: bold; }
     #tabs button.active { background: #f39c12; color: white; }
     #tables-container { flex-grow: 1; overflow-y: auto; }
-
-    /* Modal reserva placas */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
     .modal-content { background: #fff; padding: 20px; border-radius: 8px; width: 300px; max-height: 90vh; overflow-y: auto; }
     .modal-content h3 { margin-top: 0; font-size: 18px; margin-bottom: 10px; }
@@ -45,8 +43,6 @@
     .modal-content input[type="text"] { width: 100%; padding: 5px; margin: 10px 0; }
     .modal-buttons { display: flex; justify-content: space-between; margin-top: 10px; }
     .modal-buttons button { padding: 6px 12px; cursor: pointer; }
-
-    /* Modal login */
     #login-modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
     #login-modal .modal-content { width: 320px; }
     #login-modal h3 { margin-bottom: 15px; }
@@ -59,8 +55,6 @@
   </style>
 </head>
 <body>
-
-  <!-- Modal reserva placas -->
   <div id="modal" class="modal">
     <div class="modal-content">
       <h3>Marcar como Ocupado</h3>
@@ -74,8 +68,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Modal login -->
   <div id="login-modal" class="modal">
     <div class="modal-content">
       <h3>Login para reservar placas</h3>
@@ -84,14 +76,12 @@
       <div class="login-buttons">
         <button id="login-btn">Entrar</button>
         <button id="whatsapp-btn" title="Sem login? Fale comigo no WhatsApp">
-          <!-- Ícone WhatsApp -->
           <svg viewBox="0 0 24 24"><path d="M20.5 3.5a10.4 10.4 0 0 0-15 14.4l-1.9 5.4 5.5-1.8a10.4 10.4 0 1 0 11.4-17zm-1.3 13.2c-.2.6-1.1 1.2-1.7 1.3-.5.1-1.1.2-2.2-.4-2.5-1.1-4.1-3.6-4.2-3.8-.1-.2-1-1.2-1-1.2s-.4-.5-.4-1.2c0-.6.4-.9.5-1 .2-.1.4-.1.5-.2.2 0 .4 0 .6.3.2.3.7 1.2.8 1.4.2.3.4.5.7.6.4.2.7.2 1.1.1.4-.1.9-.5 1.1-.7.3-.3.3-.5.3-.7 0-.2-.3-.5-.5-.7-.1-.1-.3-.2-.4-.4-.1-.2-.6-.9-.8-1.2-.2-.3-.3-.5-.4-.7-.1-.2 0-.4 0-.5 0-.1 0-.3.1-.4.1-.1.3-.3.4-.5.1-.1.1-.2 0-.3s-1-.4-1.3-.5c-.3-.2-.5-.2-.7-.3-.2-.1-.4-.2-.6-.2-.2 0-.3 0-.5.1-.2 0-.4.1-.6.3-.1.2-.3.3-.4.4-.1.1-.3.2-.4.3-.1.2-.2.4-.2.5 0 .1 0 .3.1.5.1.3.3.6.4.9.2.3.3.5.5.7.1.1.3.3.6.4.4.1.9.1 1.4.1.5 0 1.1 0 1.7-.1 1.2-.1 2.1-.3 2.9-1 .8-.6 1.3-1.6 1.5-2.3z"/></svg>
           WhatsApp
         </button>
       </div>
     </div>
   </div>
-
   <div id="sidebar">
     <h2>
       <img src="logo.png" alt="Logo" style="height: 30px; margin-right: 10px; vertical-align: middle;">
@@ -120,7 +110,6 @@
       <button id="btn-reservar-multiplos">Reservar Selecionadas</button>
     </div>
   </div>
-
 <script>
 (async function(){
   const bisemanas = Array.from({length:26}, (_,i) => String(2 + i*2).padStart(2,'0'));
@@ -150,12 +139,14 @@
   let abaAtual = 'clientes';
   let bisemanaSelecionada = bisemanas[0];
 
-  // Usuário autenticado simples no navegador
-  function isLoggedIn() {
-    return sessionStorage.getItem('loggedIn') === 'true';
-  }
-  function setLoggedIn(value) {
-    sessionStorage.setItem('loggedIn', value ? 'true' : 'false');
+  async function isLoggedIn() {
+    try {
+      const response = await fetch('/api/check-auth', { method: 'GET' });
+      return response.ok;
+    } catch (e) {
+      console.error('Erro ao verificar autenticação:', e);
+      return false;
+    }
   }
 
   function criarLiBisemana(bi) {
@@ -223,6 +214,7 @@
       fornecedoresData = await fornecedoresRes.json();
     } catch (e) {
       console.error('Erro ao carregar dados', e);
+      alert('Erro ao carregar dados. Verifique a conexão.');
     }
   }
 
@@ -232,6 +224,7 @@
       outdoors = await res.json();
     } catch (e) {
       console.error('Erro ao carregar outdoors', e);
+      alert('Erro ao carregar outdoors. Verifique se outdoors.json existe.');
     }
   }
 
@@ -243,17 +236,23 @@
     input.addEventListener('change', async () => {
       if (!clientesData[bisemanaSelecionada]) clientesData[bisemanaSelecionada] = {};
       clientesData[bisemanaSelecionada][outdoorId] = input.value;
-      await fetch('/api/clientes', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          bisemana: bisemanaSelecionada,
-          outdoorId,
-          cliente: input.value
-        })
-      });
-      await carregarDados();
-      renderizarTabela();
+      try {
+        const response = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            bisemana: bisemanaSelecionada,
+            outdoorId,
+            cliente: input.value
+          })
+        });
+        if (!response.ok) throw new Error('Erro ao salvar cliente');
+        await carregarDados();
+        renderizarTabela();
+      } catch (e) {
+        console.error('Erro ao salvar cliente:', e);
+        alert('Erro ao salvar cliente. Tente novamente.');
+      }
     });
     return input;
   }
@@ -265,21 +264,26 @@
     input.placeholder = 'Fornecedor';
     input.addEventListener('change', async () => {
       fornecedoresData[outdoorId] = input.value;
-      await fetch('/api/fornecedores', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          outdoorId,
-          fornecedor: input.value
-        })
-      });
-      await carregarDados();
-      renderizarTabela();
+      try {
+        const response = await fetch('/api/fornecedores', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            outdoorId,
+            fornecedor: input.value
+          })
+        });
+        if (!response.ok) throw new Error('Erro ao salvar fornecedor');
+        await carregarDados();
+        renderizarTabela();
+      } catch (e) {
+        console.error('Erro ao salvar fornecedor:', e);
+        alert('Erro ao salvar fornecedor. Tente novamente.');
+      }
     });
     return input;
   }
 
-  // Função para abrir modal reserva
   function abrirModal(checkboxes, confirmarFn, clienteAtual = '') {
     modalCheckboxes.innerHTML = '';
     checkboxes.forEach(bi => {
@@ -295,6 +299,7 @@
     callbackConfirmar = confirmarFn;
     modal.style.display = 'flex';
   }
+
   function fecharModal() { modal.style.display = 'none'; }
 
   btnCancelar.onclick = fecharModal;
@@ -304,61 +309,67 @@
   btnConfirmar.onclick = () => {
     const bis = [...modalCheckboxes.querySelectorAll('input:checked')].map(c => c.value);
     const cliente = modalCliente.value.trim();
-    if (bis.length === 0 || cliente === '') {
-      alert('Selecione pelo menos uma bi-semana e informe o cliente.');
+    if (bis.length === 0) {
+      alert('Selecione pelo menos uma bi-semana.');
+      return;
+    }
+    if (cliente === '') {
+      alert('Informe o nome do cliente.');
       return;
     }
     callbackConfirmar(bis, cliente);
     fecharModal();
   };
 
-  // Função para abrir modal login
   function abrirLoginModal(callbackAfterLogin) {
     loginModal.style.display = 'flex';
     loginUsername.value = '';
     loginPassword.value = '';
     loginUsername.focus();
 
-    // Função temporária para login
-    function tentarLogin() {
+    async function tentarLogin() {
       const user = loginUsername.value.trim();
       const pass = loginPassword.value.trim();
-      // VALIDAÇÃO FIXA - substitua por backend real
-      if(user === 'atendimento' && pass === '9937') {
-        setLoggedIn(true);
-        alert('Login efetuado.');
-        fecharLoginModal();
-        if (callbackAfterLogin) callbackAfterLogin();
-      } else {
-        alert('Usuário ou senha incorretos.');
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: user, senha: pass })
+        });
+        if (response.ok) {
+          alert('Login efetuado.');
+          fecharLoginModal();
+          if (callbackAfterLogin) callbackAfterLogin();
+        } else {
+          alert('Usuário ou senha incorretos.');
+        }
+      } catch (e) {
+        alert('Erro ao fazer login. Tente novamente.');
+        console.error('Erro no login:', e);
       }
     }
 
     loginBtn.onclick = tentarLogin;
-
-    // Enter para login
     loginModal.onkeydown = e => {
       if (e.key === 'Enter') {
         tentarLogin();
-      } else if(e.key === 'Escape') {
+      } else if (e.key === 'Escape') {
         fecharLoginModal();
       }
     };
   }
+
   function fecharLoginModal() {
     loginModal.style.display = 'none';
     loginModal.onkeydown = null;
     loginBtn.onclick = null;
   }
 
-  // Botão WhatsApp abre link no WhatsApp Web / app
   whatsappBtn.onclick = () => {
-    // Coloque seu número no formato internacional sem espaços nem traços, ex: 558499373429
     const numeroWhats = '5584999373429';
     window.open(`https://wa.me/${numeroWhats}`, '_blank');
   };
 
-  // Cria botão status com bloqueio se não logado
   function criarBotaoStatus(outdoorId) {
     const btn = document.createElement('button');
     btn.className = 'status-toggle';
@@ -366,11 +377,8 @@
     atualizarBotao(btn, ocupadoAtual);
 
     btn.addEventListener('click', async () => {
-      if (!isLoggedIn()) {
-        abrirLoginModal(() => {
-          // Após login, abrir modal reserva normalmente
-          abrirModalParaReserva(outdoorId);
-        });
+      if (!(await isLoggedIn())) {
+        abrirLoginModal(() => abrirModalParaReserva(outdoorId));
         return;
       }
 
@@ -379,26 +387,31 @@
       if (!ocupado) {
         abrirModalParaReserva(outdoorId);
       } else {
-        // Desocupar direto
         if (!statusData[bisemanaSelecionada]) statusData[bisemanaSelecionada] = {};
         if (!clientesData[bisemanaSelecionada]) clientesData[bisemanaSelecionada] = {};
 
         statusData[bisemanaSelecionada][outdoorId] = false;
         clientesData[bisemanaSelecionada][outdoorId] = '';
 
-        await fetch('/api/status', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, ocupado: false })
-        });
-        await fetch('/api/clientes', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, cliente: '' })
-        });
-
-        await carregarDados();
-        renderizarTabela();
+        try {
+          const statusResponse = await fetch('/api/status', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, ocupado: false })
+          });
+          if (!statusResponse.ok) throw new Error('Erro ao desocupar status');
+          const clienteResponse = await fetch('/api/clientes', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, cliente: '' })
+          });
+          if (!clienteResponse.ok) throw new Error('Erro ao limpar cliente');
+          await carregarDados();
+          renderizarTabela();
+        } catch (e) {
+          console.error('Erro ao desocupar:', e);
+          alert('Erro ao desocupar placa. Tente novamente.');
+        }
       }
     });
 
@@ -417,32 +430,37 @@
       clienteAtual = clientesData[bisSelecionadas[0]]?.[outdoorId] || '';
     }
     abrirModal(bisemanas, async (bisSelecionadasModal, cliente) => {
-      bisemanas.forEach(bi => {
-        if (!statusData[bi]) statusData[bi] = {};
-        if (!clientesData[bi]) clientesData[bi] = {};
-        if (bisSelecionadasModal.includes(bi)) {
-          statusData[bi][outdoorId] = true;
-          clientesData[bi][outdoorId] = cliente;
-        } else {
-          statusData[bi][outdoorId] = false;
-          clientesData[bi][outdoorId] = '';
-        }
-      });
+      try {
+        for (const bi of bisemanas) {
+          if (!statusData[bi]) statusData[bi] = {};
+          if (!clientesData[bi]) clientesData[bi] = {};
+          if (bisSelecionadasModal.includes(bi)) {
+            statusData[bi][outdoorId] = true;
+            clientesData[bi][outdoorId] = cliente;
+          } else {
+            statusData[bi][outdoorId] = false;
+            clientesData[bi][outdoorId] = '';
+          }
 
-      for (const bi of bisemanas) {
-        await fetch('/api/status', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ bisemana: bi, outdoorId, ocupado: statusData[bi][outdoorId] })
-        });
-        await fetch('/api/clientes', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ bisemana: bi, outdoorId, cliente: clientesData[bi][outdoorId] })
-        });
+          const statusResponse = await fetch('/api/status', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bi, outdoorId, ocupado: statusData[bi][outdoorId] })
+          });
+          if (!statusResponse.ok) throw new Error(`Erro ao salvar status para bi ${bi}`);
+          const clienteResponse = await fetch('/api/clientes', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ bisemana: bi, outdoorId, cliente: clientesData[bi][outdoorId] })
+          });
+          if (!clienteResponse.ok) throw new Error(`Erro ao salvar cliente para bi ${bi}`);
+        }
+        await carregarDados();
+        renderizarTabela();
+      } catch (e) {
+        console.error('Erro ao reservar:', e);
+        alert('Erro ao reservar placa. Tente novamente.');
       }
-      await carregarDados();
-      renderizarTabela();
     }, clienteAtual);
   }
 
@@ -451,7 +469,6 @@
     btn.style.backgroundColor = ocupado ? '#e74c3c' : '#27ae60';
   }
 
-  // Cria checkbox para seleção múltipla de outdoors
   function criarCheckboxSelecao(outdoorId) {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -466,7 +483,6 @@
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
 
-    // Coluna seleção
     const thSel = document.createElement('th');
     thSel.textContent = '';
     trHead.appendChild(thSel);
@@ -489,7 +505,6 @@
 
       const tr = document.createElement('tr');
 
-      // Checkbox seleção
       const tdSel = document.createElement('td');
       const checkbox = criarCheckboxSelecao(out.id);
       tdSel.appendChild(checkbox);
@@ -530,35 +545,38 @@
   document.getElementById('filtroStatus').addEventListener('change', renderizarTabela);
 
   btnGerar.addEventListener('click', async () => {
-    const filtroStatus = document.getElementById('filtroStatus').value;
-    const response = await fetch('/api/relatorio', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ bisemanas: [bisemanaSelecionada], filtroStatus })
-    });
-    if (response.ok) {
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `relatorio_bisemana_${bisemanaSelecionada}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    try {
+      const filtroStatus = document.getElementById('filtroStatus').value;
+      const response = await fetch('/api/relatorio', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ bisemanas: [bisemanaSelecionada], filtroStatus })
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `relatorio_bisemana_${bisemanaSelecionada}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        alert('Erro ao gerar PDF. Tente novamente.');
+      }
+    } catch (e) {
+      console.error('Erro ao gerar PDF:', e);
+      alert('Erro ao gerar PDF. Verifique a conexão.');
     }
   });
 
-  btnReservarMultiplos.addEventListener('click', () => {
-    if (!isLoggedIn()) {
-      abrirLoginModal(() => {
-        // Após login, repetir clique do botão
-        btnReservarMultiplos.click();
-      });
+  btnReservarMultiplos.addEventListener('click', async () => {
+    if (!(await isLoggedIn())) {
+      abrirLoginModal(() => btnReservarMultiplos.click());
       return;
     }
 
-    // Coleta todos os outdoors selecionados
     const checkboxes = tablesContainer.querySelectorAll('input[type=checkbox]:checked');
     if (checkboxes.length === 0) {
       alert('Selecione ao menos uma placa para reservar.');
@@ -567,38 +585,43 @@
     const selectedOutdoors = [...checkboxes].map(cb => cb.dataset.outdoorId);
 
     abrirModal(bisemanas, async (bisSelecionadasModal, cliente) => {
-      for (const bi of bisSelecionadasModal) {
-        if (!statusData[bi]) statusData[bi] = {};
-        if (!clientesData[bi]) clientesData[bi] = {};
-        for (const outId of selectedOutdoors) {
-          statusData[bi][outId] = true;
-          clientesData[bi][outId] = cliente;
+      try {
+        for (const bi of bisSelecionadasModal) {
+          if (!statusData[bi]) statusData[bi] = {};
+          if (!clientesData[bi]) clientesData[bi] = {};
+          for (const outId of selectedOutdoors) {
+            statusData[bi][outId] = true;
+            clientesData[bi][outId] = cliente;
 
-          await fetch('/api/status', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ bisemana: bi, outdoorId: outId, ocupado: true })
-          });
-          await fetch('/api/clientes', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ bisemana: bi, outdoorId: outId, cliente })
-          });
+            const statusResponse = await fetch('/api/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bisemana: bi, outdoorId: outId, ocupado: true })
+            });
+            if (!statusResponse.ok) throw new Error(`Erro ao salvar status para bi ${bi}, outdoor ${outId}`);
+
+            const clienteResponse = await fetch('/api/clientes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bisemana: bi, outdoorId: outId, cliente })
+            });
+            if (!clienteResponse.ok) throw new Error(`Erro ao salvar cliente para bi ${bi}, outdoor ${outId}`);
+          }
         }
+        await carregarDados();
+        renderizarTabela();
+      } catch (e) {
+        console.error('Erro ao reservar:', e);
+        alert('Erro ao reservar placas. Tente novamente.');
       }
-      await carregarDados();
-      renderizarTabela();
     });
   });
 
   await carregarOutdoors();
   await carregarDados();
-
   atualizarAtivoSidebar();
   renderizarTabela();
-
 })();
 </script>
-
 </body>
 </html>

@@ -1,5 +1,3 @@
-// Atualização para usuário e senha
-
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
@@ -54,19 +52,21 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Login atualizado
-app.post('/login', (req, res) => {
+app.get('/api/check-auth', (req, res) => {
+  if (req.session.autorizado) {
+    res.sendStatus(200);
+  } else {
+    res.sendStatus(401);
+  }
+});
+
+app.post('/api/login', (req, res) => {
   const { usuario, senha } = req.body;
   if (usuario === 'atendimento' && senha === '9937') {
     req.session.autorizado = true;
     return res.sendStatus(200);
   }
   res.sendStatus(401);
-});
-
-app.get('/painel', (req, res) => {
-  if (!req.session.autorizado) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/api/status', (req, res) => res.json(statusData));
