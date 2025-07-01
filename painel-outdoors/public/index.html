@@ -156,16 +156,28 @@
     return li;
   }
 
-  function biAtual() {
-    const hoje = new Date();
-    const ano = hoje.getFullYear();
-    if (ano !== 2025) return bisemanas[0];
-    const inicioAno = new Date(2025, 0, 1);
-    const diffDias = Math.floor((hoje - inicioAno) / (1000*60*60*24));
-    const bi = 2 + Math.floor(diffDias / 14) * 2;
-    const biStr = String(bi).padStart(2,'0');
-    return bisemanas.includes(biStr) ? biStr : bisemanas[bisemanas.length-1];
+  function getISOWeekNumber(date) {
+  const target = new Date(date.valueOf());
+  const dayNr = (date.getDay() + 6) % 7; // segunda = 0, domingo = 6
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
   }
+  return 1 + Math.round((firstThursday - target) / (7 * 24 * 3600 * 1000));
+}
+
+function biAtual() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  if (ano !== 2025) return bisemanas[0];
+  const semanaISO = getISOWeekNumber(hoje);
+  let bi = semanaISO % 2 === 0 ? semanaISO : semanaISO + 1;
+  if (bi > 52) bi = 52;
+  const biStr = String(bi).padStart(2, '0');
+  return bisemanas.includes(biStr) ? biStr : bisemanas[bisemanas.length - 1];
+}
 
   bisemanas.forEach(bi => {
     const li = criarLiBisemana(bi);
