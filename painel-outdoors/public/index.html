@@ -9,7 +9,7 @@
     #sidebar { width: 280px; background: #2c3e50; color: white; padding-top: 20px; box-sizing: border-box; overflow-y: auto; border-right: 1px solid #1a252f; }
     #sidebar h2 { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-weight: normal; font-size: 18px; }
     #bisemanas-list { list-style: none; padding: 0 10px; margin: 0; }
-    #bisemanas-list li { padding: 12px 10px; cursor: pointer; border-left: 4px solid transparent; user-select: none; transition: background 0.2s, border-color 0.2s; font-size: 14px; line-height: 1.3; white-space: normal; }
+    #bisemanas-list li { padding: 12px 10px; cursor: pointer; border-left: 4px solid transparent; user-select: none; transition: backgroundboj-0.2s, border-color 0.2s; font-size: 14px; line-height: 1.3; white-space: normal; }
     #bisemanas-list li:hover { background: #34495e; }
     #bisemanas-list li.active { background: #2c3e50; border-left-color: #f39c12; font-weight: bold; color: white; }
     #bisemanas-list li.current-bisemana { background-color: #2980b9; border-left-color: #2980b9; font-weight: bold; color: white; }
@@ -94,6 +94,7 @@
       <img src="logo.png" alt="Logo" style="height: 30px; margin-right: 10px; vertical-align: middle;">
       Controle de Outdoors
     </h1>
+    <div style="margin-bottom: 15px;">Bissemana Atual: <span id="bissemana-atual"></span></div>
     <div id="tabs">
       <button id="tab-clientes" class="active">Clientes</button>
       <button id="tab-fornecedores">Fornecedores</button>
@@ -112,11 +113,12 @@
   </div>
 <script>
 (async function(){
-  const bisemanas = Array.from({length:26}, (_,i) => String(2 + i*2).padStart(2,'0'));
+  const bisemanas = Array.from({length: 26}, (_, i) => String(2 + i*2).padStart(2, '0'));
   let statusData = {};
   let clientesData = {};
   let fornecedoresData = {};
   let outdoors = [];
+  let bisemanaSelecionada = biAtual();
 
   const bisemanasList = document.getElementById('bisemanas-list');
   const tablesContainer = document.getElementById('tables-container');
@@ -137,7 +139,6 @@
 
   let callbackConfirmar = null;
   let abaAtual = 'clientes';
-  let bisemanaSelecionada = bisemanas[0];
 
   async function isLoggedIn() {
     try {
@@ -156,28 +157,17 @@
     return li;
   }
 
-  function getISOWeekNumber(date) {
-  const target = new Date(date.valueOf());
-  const dayNr = (date.getDay() + 6) % 7; // segunda = 0, domingo = 6
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() !== 4) {
-    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  function biAtual() {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    if (ano < 2025) return bisemanas[0];
+    if (ano > 2025) return bisemanas[bisemanas.length - 1];
+    const inicioCalendario = new Date(2024, 11, 30);
+    const diffDias = Math.floor((hoje - inicioCalendario) / (1000 * 60 * 60 * 24));
+    const bi = 2 + Math.floor(diffDias / 14) * 2;
+    const biStr = String(bi).padStart(2, '0');
+    return bisemanas.includes(biStr) ? biStr : bisemanas[bisemanas.length - 1];
   }
-  return 1 + Math.round((firstThursday - target) / (7 * 24 * 3600 * 1000));
-}
-
-function biAtual() {
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  if (ano !== 2025) return bisemanas[0];
-  const semanaISO = getISOWeekNumber(hoje);
-  let bi = semanaISO % 2 === 0 ? semanaISO : semanaISO + 1;
-  if (bi > 52) bi = 52;
-  const biStr = String(bi).padStart(2, '0');
-  return bisemanas.includes(biStr) ? biStr : bisemanas[bisemanas.length - 1];
-}
 
   bisemanas.forEach(bi => {
     const li = criarLiBisemana(bi);
@@ -194,12 +184,25 @@ function biAtual() {
     }
   });
 
-  function atualizarAtivoSidebar(){
+  function atualizarAtivoSidebar() {
     [...bisemanasList.children].forEach(li => {
-      li.classList.remove('active');
+      li.classList.remove('active', 'current-bisemana');
       if (li.dataset.bisemana === bisemanaSelecionada) li.classList.add('active');
+      if (li.dataset.bisemana === biAtual()) li.classList.add('current-bisemana');
     });
+    document.getElementById('bissemana-atual').textContent = biAtual();
   }
+
+  function atualizarBissemanaAtual() {
+    const novaBissemana = biAtual();
+    if (novaBissemana !== bisemanaSelecionada) {
+      bisemanaSelecionada = novaBissemana;
+      atualizarAtivoSidebar();
+      renderizarTabela();
+    }
+  }
+
+  setInterval(atualizarBissemanaAtual, 60 * 1000);
 
   tabClientes.addEventListener('click', () => {
     abaAtual = 'clientes';
@@ -409,7 +412,7 @@ function biAtual() {
           const statusResponse = await fetch('/api/status', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, ocupado: false })
+        body: JSON.stringify({ bisemana: bisemanaSelecionada, outdoorId, ocupado: false })
           });
           if (!statusResponse.ok) throw new Error('Erro ao desocupar status');
           const clienteResponse = await fetch('/api/clientes', {
