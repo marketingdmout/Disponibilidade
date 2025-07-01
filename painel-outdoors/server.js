@@ -79,6 +79,7 @@ app.post('/api/status', (req, res) => {
   if (!statusData[bisemana]) statusData[bisemana] = {};
   statusData[bisemana][outdoorId] = ocupado;
   saveJSON('status.json', statusData);
+  console.log(`SALVO: Outdoor ${outdoorId} na bi-semana ${bisemana} marcado como ${ocupado ? 'OCUPADO' : 'DISPONÍVEL'}`);
   res.sendStatus(200);
 });
 
@@ -102,9 +103,6 @@ app.post('/api/fornecedores', (req, res) => {
 app.post('/api/relatorio', (req, res) => {
   const { bisemanas, filtroStatus } = req.body;
   const bisemana = bisemanas[0];
-
-  // Recarregar statusData para pegar o JSON atualizado do arquivo
-  statusData = loadJSON('status.json');
 
   const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, right: 40, bottom: 40 } });
   res.setHeader('Content-Disposition', `attachment; filename=relatorio_outdoors_bisemana_${bisemana}.pdf`);
