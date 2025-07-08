@@ -1,184 +1,166 @@
+// server.js
+
 const express = require('express');
-const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
-const PDFDocument = require('pdfkit');
+const session = require('express-session');
+const bodyParser = require('body-parser');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+app.use(bodyParser.json());
 app.use(session({
-  secret: 'michelly123',
+  secret: 'chave-secreta',
   resave: false,
   saveUninitialized: true
 }));
 
-const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+const STATUS_FILE = path.join(__dirname, 'data/status.json');
+const CLIENTES_FILE = path.join(__dirname, 'data/clientes.json');
+const FORNECEDORES_FILE = path.join(__dirname, 'data/fornecedores.json');
 
-const loadJSON = (filename) => {
-  const filePath = path.join(DATA_DIR, filename);
+function garantirArquivo(file, conteudoInicial) {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify(conteudoInicial, null, 2));
+  }
+}
+garantirArquivo(STATUS_FILE, {});
+garantirArquivo(CLIENTES_FILE, {});
+garantirArquivo(FORNECEDORES_FILE, {});
+
+function carregarJSON(file) {
   try {
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath));
-    } else {
-      fs.writeFileSync(filePath, '{}');
-      return {};
-    }
-  } catch (err) {
-    console.error(`Erro ao ler ${filename}:`, err);
+    return JSON.parse(fs.readFileSync(file));
+  } catch {
     return {};
   }
-};
+}
 
-const saveJSON = (filename, data) => {
-  const filePath = path.join(DATA_DIR, filename);
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error(`Erro ao salvar ${filename}:`, err);
-  }
-};
+function salvarJSON(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
 
-let statusData = loadJSON('status.json');
-let clientesData = loadJSON('clientes.json');
-let fornecedoresData = loadJSON('fornecedores.json');
+// Usuário fixo
+const USUARIO = 'atendimento';
+const SENHA = '9937';
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/api/check-auth', (req, res) => {
-  if (req.session.autorizado) {
+// Login
+app.post('/api/login', (req, res) => {
+  const { usuario, senha } = req.body;
+  if (usuario === USUARIO && senha === SENHA) {
+    req.session.logado = true;
     res.sendStatus(200);
   } else {
     res.sendStatus(401);
   }
 });
 
-app.post('/api/login', (req, res) => {
-  const { usuario, senha } = req.body;
-  if (usuario === 'atendimento' && senha === '9937') {
-    req.session.autorizado = true;
-    return res.sendStatus(200);
+app.get('/api/check-auth', (req, res) => {
+  if (req.session.logado) {
+    res.sendStatus(200);
+  } else {
+    res.sendStatus(401);
   }
-  res.sendStatus(401);
 });
 
-app.get('/api/status', (req, res) => res.json(statusData));
-app.get('/api/clientes', (req, res) => res.json(clientesData));
-app.get('/api/fornecedores', (req, res) => res.json(fornecedoresData));
+// Status
+app.get('/api/status', (req, res) => {
+  res.json(carregarJSON(STATUS_FILE));
+});
 
 app.post('/api/status', (req, res) => {
-  if (!req.session.autorizado) return res.sendStatus(403);
   const { bisemana, outdoorId, ocupado } = req.body;
+  const statusData = carregarJSON(STATUS_FILE);
   if (!statusData[bisemana]) statusData[bisemana] = {};
   statusData[bisemana][outdoorId] = ocupado;
-  saveJSON('status.json', statusData);
+  salvarJSON(STATUS_FILE, statusData);
   res.sendStatus(200);
+});
+
+// Clientes
+app.get('/api/clientes', (req, res) => {
+  res.json(carregarJSON(CLIENTES_FILE));
 });
 
 app.post('/api/clientes', (req, res) => {
-  if (!req.session.autorizado) return res.sendStatus(403);
   const { bisemana, outdoorId, cliente } = req.body;
+  const clientesData = carregarJSON(CLIENTES_FILE);
   if (!clientesData[bisemana]) clientesData[bisemana] = {};
   clientesData[bisemana][outdoorId] = cliente;
-  saveJSON('clientes.json', clientesData);
+  salvarJSON(CLIENTES_FILE, clientesData);
   res.sendStatus(200);
+});
+
+// Fornecedores
+app.get('/api/fornecedores', (req, res) => {
+  res.json(carregarJSON(FORNECEDORES_FILE));
 });
 
 app.post('/api/fornecedores', (req, res) => {
-  if (!req.session.autorizado) return res.sendStatus(403);
   const { outdoorId, fornecedor } = req.body;
+  const fornecedoresData = carregarJSON(FORNECEDORES_FILE);
   fornecedoresData[outdoorId] = fornecedor;
-  saveJSON('fornecedores.json', fornecedoresData);
+  salvarJSON(FORNECEDORES_FILE, fornecedoresData);
   res.sendStatus(200);
 });
 
-app.post('/api/relatorio', (req, res) => {
-  const { bisemanas, filtroStatus } = req.body;
-  const bisemana = bisemanas[0];
+// Geração de PDF via Puppeteer
+app.post('/api/relatorio', async (req, res) => {
+  try {
+    // Exemplo básico: gera PDF com uma página HTML simples
+    const { bisemana } = req.body;
 
-  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, right: 40, bottom: 40 } });
-  res.setHeader('Content-Disposition', `attachment; filename=relatorio_outdoors_bisemana_${bisemana}.pdf`);
-  res.setHeader('Content-Type', 'application/pdf');
-  doc.pipe(res);
+    // Dados para relatório: status e clientes da bisemana
+    const statusData = carregarJSON(STATUS_FILE)[bisemana] || {};
+    const clientesData = carregarJSON(CLIENTES_FILE)[bisemana] || {};
 
-  const outdoorsPath = path.join(__dirname, 'public', 'outdoors.json');
-  const outdoors = JSON.parse(fs.readFileSync(outdoorsPath, 'utf8'));
+    // Montar HTML simples para PDF
+    let html = `<h1>Relatório - Bi-semana ${bisemana}</h1>`;
+    html += `<table border="1" cellspacing="0" cellpadding="5">
+      <thead>
+        <tr>
+          <th>Outdoor</th>
+          <th>Status</th>
+          <th>Cliente</th>
+        </tr>
+      </thead>
+      <tbody>`;
 
-  doc.font('Helvetica-Bold').fontSize(16).text(`Relatório de Outdoors - Bi-semana ${bisemana}`, { align: 'center' });
-  doc.moveDown(1);
-
-  const marginLeft = 40;
-  const marginRight = 40;
-  const pageWidth = doc.page.width - marginLeft - marginRight;
-  const colWidths = {
-    nome: 100,
-    endereco: 220,
-    status: 80,
-    cliente: pageWidth - (100 + 220 + 80),
-  };
-  const defaultRowHeight = 20;
-  let y = doc.y;
-
-  function desenharCabecalho(yPos) {
-    doc.rect(marginLeft, yPos, pageWidth, defaultRowHeight).fill('#34495e').stroke();
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(12);
-    doc.text('Outdoor', marginLeft + 5, yPos + 5, { width: colWidths.nome });
-    doc.text('Endereço', marginLeft + colWidths.nome + 5, yPos + 5, { width: colWidths.endereco });
-    doc.text('Status', marginLeft + colWidths.nome + colWidths.endereco + 5, yPos + 5, { width: colWidths.status });
-    doc.text('Cliente', marginLeft + colWidths.nome + colWidths.endereco + colWidths.status + 5, yPos + 5, { width: colWidths.cliente });
-    doc.fillColor('black').font('Helvetica').fontSize(11);
-  }
-
-  desenharCabecalho(y);
-  y += defaultRowHeight;
-
-  outdoors.forEach(out => {
-    const ocupado = !!(statusData[bisemana]?.[out.id]);
-    if (filtroStatus === 'ocupados' && !ocupado) return;
-    if (filtroStatus === 'disponiveis' && ocupado) return;
-
-    const cliente = clientesData[bisemana]?.[out.id] || '';
-    const nomeHeight = doc.heightOfString(out.nome, { width: colWidths.nome - 10 });
-    const enderecoHeight = doc.heightOfString(out.endereco, { width: colWidths.endereco - 10 });
-    const clienteHeight = doc.heightOfString(cliente, { width: colWidths.cliente - 10 });
-    const rowHeight = Math.max(nomeHeight, enderecoHeight, clienteHeight, defaultRowHeight) + 6;
-
-    if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
-      doc.addPage();
-      y = doc.page.margins.top;
-      desenharCabecalho(y);
-      y += defaultRowHeight;
+    for (const outdoorId of Object.keys(statusData)) {
+      html += `<tr>
+        <td>${outdoorId}</td>
+        <td>${statusData[outdoorId] ? 'Ocupado' : 'Disponível'}</td>
+        <td>${clientesData[outdoorId] || '-'}</td>
+      </tr>`;
     }
 
-    doc.rect(marginLeft, y, pageWidth, rowHeight).fill('#f9f9f9').stroke();
-    doc.fillColor('black');
+    html += '</tbody></table>';
 
-    doc.text(out.nome, marginLeft + 5, y + 3, { width: colWidths.nome - 10 });
-    doc.text(out.endereco, marginLeft + colWidths.nome + 5, y + 3, { width: colWidths.endereco - 10 });
+    // Iniciar Puppeteer para gerar PDF
+    const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
 
-    const statusText = ocupado ? 'Ocupado' : 'Disponível';
-    const corStatus = ocupado ? 'red' : 'green';
+    await page.setContent(html, { waitUntil: 'networkidle0' });
 
-    doc.fillColor(corStatus).text(statusText, marginLeft + colWidths.nome + colWidths.endereco + 5, y + 3, {
-      width: colWidths.status - 10,
-      align: 'center',
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+
+    await browser.close();
+
+    // Enviar PDF para o cliente
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=relatorio_bisemana_${bisemana}.pdf`,
+      'Content-Length': pdfBuffer.length,
     });
 
-    doc.fillColor('black').text(cliente, marginLeft + colWidths.nome + colWidths.endereco + colWidths.status + 5, y + 3, {
-      width: colWidths.cliente - 10,
-    });
-
-    y += rowHeight;
-  });
-
-  doc.end();
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Erro ao gerar PDF:', error);
+    res.status(500).send('Erro ao gerar PDF');
+  }
 });
 
 app.listen(PORT, () => {
